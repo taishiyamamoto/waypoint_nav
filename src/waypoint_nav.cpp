@@ -139,10 +139,14 @@ void WaypointNav::compute_orientation(){
 
 bool WaypointNav::startNavigationCallback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response){
   if(suspend_flg_ == true){
+    ROS_INFO("Cancel suspend mode!");
+    response.success = true;
+    response.message = std::string("turn off suspend");
     suspend_flg_ = false;
   }
   else{
     ROS_ERROR("Your robot already canceled suspend mode");
+    response.success = false;
     return false;
   }
   return true;
@@ -155,6 +159,7 @@ void WaypointNav::run(){
       for(current_waypoint_ = waypoints_.begin(); (current_waypoint_ != waypoints_.end()) && ros::ok(); current_waypoint_++){
         std::cout << "TODO run_wp_once" << std::endl;
         //run_wp_once();
+        ros::spinOnce();
         rate_.sleep();
       }
     } while(loop_flg_);
