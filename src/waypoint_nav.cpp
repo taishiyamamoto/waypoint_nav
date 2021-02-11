@@ -33,15 +33,16 @@ public:
   double max_update_rate_;
   bool read_yaml();
   void compute_orientation();
-//  bool start_navigation_callback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response);
+  bool startNavigationCallback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response);
 private:
   actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> move_base_action_;
   std::list<Waypoints> waypoints_;
   decltype(waypoints_)::iterator current_waypoint_;
   std::string robot_frame_, world_frame_;
   std::string filename_;
-  bool suspend_flg_;
   int resend_num;
+  bool loop_flg_;
+  bool suspend_flg_;
   ros::Rate rate_;
   ros::ServiceServer start_server_; 
   ros::Subscriber cmd_vel_sub_;
@@ -53,7 +54,8 @@ private:
 WaypointNav::WaypointNav() :
     move_base_action_("move_base", true),
     rate_(1.0),
-    last_moved_time_(0.0)
+    last_moved_time_(0.0),
+    suspend_flg_(true)
 {
   nh_.param("waypoint_nav/robot_frame", robot_frame_, std::string("/base_link"));
   nh_.param("waypoint_nav/world_frame", world_frame_, std::string("/map"));
@@ -127,6 +129,17 @@ void WaypointNav::compute_orientation(){
       it->pose.orientation = std::prev(it)->pose.orientation;
     }
   }
+}
+
+bool WaypointNav::startNavigationCallback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response){
+  if(suspend_flg_ == true){
+    suspend_flg_ = false;
+  }
+  else{
+    ROS_ERROR("Your robot already canceled suspend mode");
+    return false;
+  }
+  return true;
 }
 
 int main(int argc, char** argv){
