@@ -1,0 +1,125 @@
+#include <ros/ros.h>
+#include <std_srvs/Trigger.h>
+#include <std_srvs/Empty.h>
+#include <geometry_msgs/Pose.h>
+#include <geometry_msgs/PoseArray.h>
+#include <geometry_msgs/Twist.h>
+#include <move_base_msgs/MoveBaseAction.h>
+#include <actionlib/client/simple_action_client.h>
+#include <tf/tf.h>
+#include <tf/transform_listener.h>
+#include <tf2_ros/transform_listener.h>
+#include <geometry_msgs/TransformStamped.h>
+#include <visualization_msgs/MarkerArray.h>
+#include "yaml-cpp/yaml.h"
+
+#include <vector>
+#include <list>
+#include <string>
+#include <exception>
+#include <math.h>
+#include <fstream>
+#include <iostream>
+
+typedef struct Waypoints{
+  geometry_msgs::Pose pose;
+  std::string function;
+}Waypoints;
+
+class WaypointNav{
+public:
+  WaypointNav();
+  ros::NodeHandle nh_;
+  double max_update_rate_;
+  bool read_yaml();
+//  void compute_orientation();
+//  bool start_navigation_callback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response);
+private:
+  actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> move_base_action_;
+  std::list<Waypoints> waypoints_;
+  std::vector<geometry_msgs::Pose>::iterator current_waypoint_;
+  std::string robot_frame_, world_frame_;
+  std::string filename_;
+  bool suspend_flg_;
+  int resend_num;
+  ros::Rate rate_;
+  ros::ServiceServer start_server_; 
+  ros::Subscriber cmd_vel_sub_;
+  ros::Publisher wp_pub_;
+  ros::ServiceClient clear_costmaps_srv_;
+  double dist_err_, last_moved_time_;
+};
+
+WaypointNav::WaypointNav() :
+    move_base_action_("move_base", true),
+    rate_(1.0),
+    last_moved_time_(0.0)
+{
+  nh_.param("waypoint_nav/robot_frame", robot_frame_, std::string("/base_link"));
+  nh_.param("waypoint_nav/world_frame", world_frame_, std::string("/map"));
+
+  nh_.param("waypoint_nav/max_update_rate", max_update_rate_, 1.0);
+
+  nh_.param("waypoint_nav/filename", filename_, filename_);
+  nh_.param("waypoint_nav/dist_err", dist_err_, 1.0);
+
+//  start_server_ = nh_.advertiseService("start_wp_nav", &WaypointsNavigation::startNavigationCallback, this);
+//  cmd_vel_sub_ = nh.subscribe("cmd_vel", 1, &WaypointsNavigation::cmdVelCallback, this);
+//  clear_costmaps_srv_ = nh.serviceClient<std_srvs::Empty>("/move_base/clear_costmaps");
+}
+
+bool WaypointNav::read_yaml(){
+  ROS_INFO_STREAM("Read waypoints data from " << filename_);
+// Check whether filename.yaml exist
+  std::ifstream ifs(filename_);
+  if(ifs){
+    const YAML::Node read_result = YAML::LoadFile(filename_);
+    YAML::Node wp_yaml;
+    try{
+      wp_yaml = read_result["waypoints"];
+    }
+    catch(std::exception e){
+      ROS_ERROR("Your yaml format is wrong");
+      return false;
+    }
+
+    geometry_msgs::Pose pose;
+    std::string function;
+    for(YAML::Node points : wp_yaml){
+      pose.position.x = points["point"]["x"].as<double>();
+      pose.position.y = points["point"]["y"].as<double>();
+      pose.position.z = points["point"]["z"].as<double>();
+
+      try{
+        function = points["point"]["function"].as<std::string>();
+      }
+      catch(std::exception e){
+        ROS_ERROR("function is set by default (run) because function is not set in yaml");
+        function = std::string("run");
+      }
+      if(function == ""){
+        function = "run";
+      }
+      waypoints_.push_back({pose, function});
+      }
+    ROS_INFO_STREAM(waypoints_.size() << " waypoints is read");
+    return true;
+  }
+  else{
+    ROS_ERROR("yaml filename is wrong");
+    return false;
+  }
+}
+
+int main(int argc, char** argv){
+  ros::init(argc, argv, "waypoint_nav");
+  WaypointNav wp_nav;
+  ros::Rate rate(wp_nav.max_update_rate_);
+  bool read_result = wp_nav.read_yaml();
+  if(!read_result){
+    ROS_ERROR("Waypoint Navigatioin system is shutting down");
+    return 1;
+  }
+
+  return 0;
+}
