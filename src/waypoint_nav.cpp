@@ -34,6 +34,8 @@ public:
   bool read_yaml();
   void compute_orientation();
   bool startNavigationCallback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response);
+  void run();
+//  void run_wp_once();
 private:
   actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> move_base_action_;
   std::list<Waypoints> waypoints_;
@@ -55,20 +57,24 @@ WaypointNav::WaypointNav() :
     move_base_action_("move_base", true),
     rate_(1.0),
     last_moved_time_(0.0),
-    suspend_flg_(true)
+    loop_flg_(false),
+    suspend_flg_(true),
+    current_waypoint_(waypoints_.begin())
 {
   nh_.param("waypoint_nav/robot_frame", robot_frame_, std::string("/base_link"));
   nh_.param("waypoint_nav/world_frame", world_frame_, std::string("/map"));
 
   nh_.param("waypoint_nav/max_update_rate", max_update_rate_, 1.0);
+  ros::Rate rate_(max_update_rate_);
 
   nh_.param("waypoint_nav/filename", filename_, filename_);
   nh_.param("waypoint_nav/dist_err", dist_err_, 1.0);
 
-  current_waypoint_ = waypoints_.begin();
+  nh_.param("waypoint_nav/loop_flg", loop_flg_, false);
 
-//  start_server_ = nh_.advertiseService("start_wp_nav", &WaypointsNavigation::startNavigationCallback, this);
-//  cmd_vel_sub_ = nh.subscribe("cmd_vel", 1, &WaypointsNavigation::cmdVelCallback, this);
+
+  start_server_ = nh_.advertiseService("start_wp_nav", &WaypointNav::startNavigationCallback, this);
+//  cmd_vel_sub_ = nh.subscribe("cmd_vel", 1, &WaypointNav::cmdVelCallback, this);
 //  clear_costmaps_srv_ = nh.serviceClient<std_srvs::Empty>("/move_base/clear_costmaps");
 }
 
@@ -142,6 +148,19 @@ bool WaypointNav::startNavigationCallback(std_srvs::Trigger::Request &request, s
   return true;
 }
 
+void WaypointNav::run(){
+  while(ros::ok()){
+    // If loop_flg_ is true, do_while loop infinitely
+    do{
+      for(current_waypoint_ = waypoints_.begin(); (current_waypoint_ != waypoints_.end()) && ros::ok(); current_waypoint_++){
+        std::cout << "TODO run_wp_once" << std::endl;
+        //run_wp_once();
+        rate_.sleep();
+      }
+    } while(loop_flg_);
+  }
+}
+
 int main(int argc, char** argv){
   ros::init(argc, argv, "waypoint_nav");
   WaypointNav wp_nav;
@@ -152,6 +171,7 @@ int main(int argc, char** argv){
     return 1;
   }
   wp_nav.compute_orientation();
+  wp_nav.run();
 
   return 0;
 }
