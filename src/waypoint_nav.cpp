@@ -32,12 +32,12 @@ public:
   ros::NodeHandle nh_;
   double max_update_rate_;
   bool read_yaml();
-//  void compute_orientation();
+  void compute_orientation();
 //  bool start_navigation_callback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response);
 private:
   actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> move_base_action_;
   std::list<Waypoints> waypoints_;
-  std::vector<geometry_msgs::Pose>::iterator current_waypoint_;
+  decltype(waypoints_)::iterator current_waypoint_;
   std::string robot_frame_, world_frame_;
   std::string filename_;
   bool suspend_flg_;
@@ -62,6 +62,8 @@ WaypointNav::WaypointNav() :
 
   nh_.param("waypoint_nav/filename", filename_, filename_);
   nh_.param("waypoint_nav/dist_err", dist_err_, 1.0);
+
+  current_waypoint_ = waypoints_.begin();
 
 //  start_server_ = nh_.advertiseService("start_wp_nav", &WaypointsNavigation::startNavigationCallback, this);
 //  cmd_vel_sub_ = nh.subscribe("cmd_vel", 1, &WaypointsNavigation::cmdVelCallback, this);
@@ -111,6 +113,22 @@ bool WaypointNav::read_yaml(){
   }
 }
 
+void WaypointNav::compute_orientation(){
+  decltype(waypoints_)::iterator it, it2;
+  double goal_direction;
+  for(it = waypoints_.begin(), it2 = std::next(waypoints_.begin()); it != waypoints_.end(); it++, it2++){
+    if(it2 != waypoints_.end()){
+      goal_direction = atan2((it2)->pose.position.y - (it)->pose.position.y,
+                              (it2)->pose.position.x - (it)->pose.position.x);
+      it->pose.orientation = tf::createQuaternionMsgFromYaw(goal_direction);
+    }
+    else{
+      // set direction which is same as previous one
+      it->pose.orientation = std::prev(it)->pose.orientation;
+    }
+  }
+}
+
 int main(int argc, char** argv){
   ros::init(argc, argv, "waypoint_nav");
   WaypointNav wp_nav;
@@ -120,6 +138,7 @@ int main(int argc, char** argv){
     ROS_ERROR("Waypoint Navigatioin system is shutting down");
     return 1;
   }
+  wp_nav.compute_orientation();
 
   return 0;
 }
