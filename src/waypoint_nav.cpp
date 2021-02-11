@@ -43,15 +43,15 @@ private:
   decltype(waypoints_)::iterator current_waypoint_;
   std::string robot_frame_, world_frame_;
   std::string filename_;
-  int resend_num;
+  int resend_num_;
   bool loop_flg_;
   bool suspend_flg_;
+  double dist_err_, last_moved_time_;
   ros::Rate rate_;
   ros::ServiceServer start_server_, suspend_server_; 
   ros::Subscriber cmd_vel_sub_;
   ros::Publisher wp_pub_;
   ros::ServiceClient clear_costmaps_srv_;
-  double dist_err_, last_moved_time_;
 };
 
 WaypointNav::WaypointNav() :
@@ -59,8 +59,7 @@ WaypointNav::WaypointNav() :
     rate_(1.0),
     last_moved_time_(0.0),
     loop_flg_(false),
-    suspend_flg_(true),
-    current_waypoint_(waypoints_.begin())
+    suspend_flg_(true)
 {
   nh_.param("waypoint_nav/robot_frame", robot_frame_, std::string("/base_link"));
   nh_.param("waypoint_nav/world_frame", world_frame_, std::string("/map"));
@@ -170,6 +169,10 @@ bool WaypointNav::suspendNavigationCallback(std_srvs::Trigger::Request &request,
 }
 
 void WaypointNav::run(){
+  while((move_base_action_.waitForServer(ros::Duration(1.0)) == false) && ros::ok()){
+      ROS_INFO("Waiting...");
+  }
+
   while(ros::ok()){
     // If loop_flg_ is true, do_while loop infinitely
     do{
@@ -183,7 +186,28 @@ void WaypointNav::run(){
 }
 
 void WaypointNav::run_wp_once(){
-
+  resend_num_ = 0;
+  while((resend_num_ < 3) && ros::ok()){
+    if(suspend_flg_){
+      ros::spinOnce();
+      rate_.sleep();
+    }
+    else{
+//      pub_wp();
+      actionlib::SimpleClientGoalState state_ = move_base_action_.getState();
+      if(state_ == actionlib::SimpleClientGoalState::ACTIVE){
+        ros::spinOnce();
+        rate_.sleep();
+      }
+      else if(state_ == actionlib::SimpleClientGoalState::SUCCEEDED){
+        ROS_INFO("Run next waypoint");
+        break;
+      }
+      else{
+        resend_num_++;
+      }
+    }
+  }
 }
 
 int main(int argc, char** argv){
