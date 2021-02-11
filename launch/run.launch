@@ -1,5 +1,5 @@
 <launch>
-  <node name="waypoint_nav" pkg="waypoint_nav" type="a" output="screen" >
+  <node name="waypoint_nav" pkg="waypoint_nav" type="waypoint_nav" output="screen" >
     <remap from="cmd_vel" to="cmd_vel/icart_mini" />
     <param name="filename" value="/root/alpha.yaml"/>
   </node>
