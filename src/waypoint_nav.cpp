@@ -168,7 +168,8 @@ void WaypointNav::run_wp_once(){
   while((resend_num_ < 3) && ros::ok()){
     send_wp();
     actionlib::SimpleClientGoalState state_ = move_base_action_.getState();
-    if(state_ == actionlib::SimpleClientGoalState::ACTIVE){
+    if(state_ == actionlib::SimpleClientGoalState::ACTIVE || 
+       state_ == actionlib::SimpleClientGoalState::PENDING){
       ros::spinOnce();
       rate_.sleep();
     }
@@ -189,7 +190,6 @@ bool WaypointNav::on_wp(){
   }
   catch (tf2::TransformException &ex) {
     ROS_WARN("%s",ex.what());
-    ros::Duration(1.0).sleep();
     return false;
   }
 
@@ -210,6 +210,7 @@ void WaypointNav::send_wp(){
   move_base_goal.target_pose.pose.orientation = current_waypoint_->pose.orientation;
 
   move_base_action_.sendGoal(move_base_goal);
+  ros::Duration(0.5).sleep();
 
   if(current_waypoint_->function == "suspend"){
     suspend_flg_ = true;
