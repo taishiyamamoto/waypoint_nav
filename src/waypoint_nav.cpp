@@ -177,7 +177,9 @@ void WaypointNav::run(){
     // If loop_flg_ is true, do_while loop infinitely
     do{
       for(current_waypoint_ = waypoints_.begin(); (current_waypoint_ != waypoints_.end()) && ros::ok(); current_waypoint_++){
-        run_wp_once();
+        if(!suspend_flg_){
+          run_wp_once();
+        }
         ros::spinOnce();
         rate_.sleep();
       }
@@ -188,24 +190,18 @@ void WaypointNav::run(){
 void WaypointNav::run_wp_once(){
   resend_num_ = 0;
   while((resend_num_ < 3) && ros::ok()){
-    if(suspend_flg_){
+//    pub_wp();
+    actionlib::SimpleClientGoalState state_ = move_base_action_.getState();
+    if(state_ == actionlib::SimpleClientGoalState::ACTIVE){
       ros::spinOnce();
       rate_.sleep();
     }
+    else if(state_ == actionlib::SimpleClientGoalState::SUCCEEDED){
+      ROS_INFO("Run next waypoint");
+      break;
+    }
     else{
-//      pub_wp();
-      actionlib::SimpleClientGoalState state_ = move_base_action_.getState();
-      if(state_ == actionlib::SimpleClientGoalState::ACTIVE){
-        ros::spinOnce();
-        rate_.sleep();
-      }
-      else if(state_ == actionlib::SimpleClientGoalState::SUCCEEDED){
-        ROS_INFO("Run next waypoint");
-        break;
-      }
-      else{
-        resend_num_++;
-      }
+      resend_num_++;
     }
   }
 }
