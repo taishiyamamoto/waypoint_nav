@@ -55,7 +55,7 @@ private:
   bool suspend_flg_;
   double dist_err_;
   double last_moved_time_;
-  std::unordered_map<std::string, void(*)()> function_map_;
+  std::unordered_map<std::string, std::function<void(void)>> function_map_;
   ros::Rate rate_;
   ros::ServiceServer start_server_, suspend_server_; 
   ros::Subscriber cmd_vel_sub_;
@@ -84,6 +84,8 @@ WaypointNav::WaypointNav() :
 
   nh_.param("waypoint_nav/loop_flg", loop_flg_, false);
 
+  function_map_.insert(std::make_pair("run", std::bind(&WaypointNav::run, this)));
+  function_map_.insert(std::make_pair("suspend", std::bind(&WaypointNav::suspend, this)));
 
   visualization_wp_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("visualization_wp", 1);
   cmd_vel_sub_ = nh_.subscribe("cmd_vel", 1, &WaypointNav::cmdVelCallback, this);
@@ -155,7 +157,7 @@ void WaypointNav::compute_orientation(){
 }
 
 void WaypointNav::visualize_wp(){
-  int cnt;
+  int cnt = 0;
   int waypoint_num = waypoints_.size();
   geometry_msgs::Vector3 arrow; // config arrow shape
   // x is arrow length
