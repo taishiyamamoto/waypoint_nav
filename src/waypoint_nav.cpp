@@ -111,7 +111,7 @@ bool WaypointNav::read_yaml(){
         function = points["point"]["function"].as<std::string>();
       }
       catch(std::exception e){
-        ROS_ERROR("function is set by default (run) because function is not set in yaml");
+        ROS_WARN("function is set by default (run) because function is not set in yaml");
         function = std::string("run");
       }
       if(function == ""){
