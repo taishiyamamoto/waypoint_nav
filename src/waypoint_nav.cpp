@@ -4,12 +4,11 @@
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseArray.h>
 #include <geometry_msgs/Twist.h>
+#include <geometry_msgs/TransformStamped.h>
 #include <move_base_msgs/MoveBaseAction.h>
 #include <actionlib/client/simple_action_client.h>
-#include <tf/tf.h>
-#include <tf/transform_listener.h>
 #include <tf2_ros/transform_listener.h>
-#include <geometry_msgs/TransformStamped.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <visualization_msgs/MarkerArray.h>
 #include "yaml-cpp/yaml.h"
 
@@ -139,11 +138,14 @@ bool WaypointNav::read_yaml(){
 void WaypointNav::compute_orientation(){
   decltype(waypoints_)::iterator it, it2;
   double goal_direction;
+  tf2::Quaternion calc_orientation;
   for(it = waypoints_.begin(), it2 = std::next(waypoints_.begin()); it != waypoints_.end(); it++, it2++){
     if(it2 != waypoints_.end()){
       goal_direction = atan2((it2)->pose.position.y - (it)->pose.position.y,
                               (it2)->pose.position.x - (it)->pose.position.x);
-      it->pose.orientation = tf::createQuaternionMsgFromYaw(goal_direction);
+
+      calc_orientation.setRPY(0, 0, goal_direction);
+      it->pose.orientation = tf2::toMsg(calc_orientation);
     }
     else{
       // set direction which is same as previous one
@@ -299,7 +301,7 @@ void WaypointNav::run(){
       rate_.sleep();
     }
     else if( !on_wp() || state_ == actionlib::SimpleClientGoalState::SUCCEEDED){
-      ROS_INFO("Reach target waypoint!")
+      ROS_INFO("Reach target waypoint!");
       ROS_INFO("Run next waypoint");
       break;
     }
