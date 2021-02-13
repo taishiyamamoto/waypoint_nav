@@ -37,6 +37,7 @@ public:
   bool suspendNavigationCallback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response);
   void run();
   void run_wp_once();
+  void send_wp();
 private:
   actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> move_base_action_;
   std::list<Waypoints> waypoints_;
@@ -190,7 +191,7 @@ void WaypointNav::run(){
 void WaypointNav::run_wp_once(){
   resend_num_ = 0;
   while((resend_num_ < 3) && ros::ok()){
-//    pub_wp();
+    send_wp();
     actionlib::SimpleClientGoalState state_ = move_base_action_.getState();
     if(state_ == actionlib::SimpleClientGoalState::ACTIVE){
       ros::spinOnce();
@@ -204,6 +205,16 @@ void WaypointNav::run_wp_once(){
       resend_num_++;
     }
   }
+}
+
+void WaypointNav::send_wp(){
+  move_base_msgs::MoveBaseGoal move_base_goal;
+  move_base_goal.target_pose.header.stamp = ros::Time::now();
+  move_base_goal.target_pose.header.frame_id = world_frame_;
+  move_base_goal.target_pose.pose.position = current_waypoint_->pose.position;
+  move_base_goal.target_pose.pose.orientation = current_waypoint_->pose.orientation;
+
+  move_base_action_.sendGoal(move_base_goal);
 }
 
 int main(int argc, char** argv){
