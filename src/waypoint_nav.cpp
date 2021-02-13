@@ -299,6 +299,7 @@ void WaypointNav::run(){
       rate_.sleep();
     }
     else if( !on_wp() || state_ == actionlib::SimpleClientGoalState::SUCCEEDED){
+      ROS_INFO("Reach target waypoint!")
       ROS_INFO("Run next waypoint");
       break;
     }
