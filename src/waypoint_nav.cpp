@@ -33,6 +33,7 @@ public:
   double max_update_rate_;
   bool read_yaml();
   void compute_orientation();
+  void visualize_wp();
   void run();
   void run_wp_once();
   bool on_wp();
@@ -53,7 +54,7 @@ private:
   ros::Rate rate_;
   ros::ServiceServer start_server_, suspend_server_; 
   ros::Subscriber cmd_vel_sub_;
-  ros::Publisher wp_pub_;
+  ros::Publisher visualization_wp_pub_;
   ros::ServiceClient clear_costmaps_srv_;
   tf2_ros::Buffer tfBuffer_;
   tf2_ros::TransformListener tfListener_;
@@ -81,6 +82,7 @@ WaypointNav::WaypointNav() :
 
   start_server_ = nh_.advertiseService("start_wp_nav", &WaypointNav::startNavigationCallback, this);
   suspend_server_ = nh_.advertiseService("suspend_wp_nav", &WaypointNav::suspendNavigationCallback, this);
+  visualization_wp_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("visualization_wp", 1);
 //  cmd_vel_sub_ = nh.subscribe("cmd_vel", 1, &WaypointNav::cmdVelCallback, this);
 //  clear_costmaps_srv_ = nh.serviceClient<std_srvs::Empty>("/move_base/clear_costmaps");
 }
@@ -141,6 +143,38 @@ void WaypointNav::compute_orientation(){
       // set direction which is same as previous one
       it->pose.orientation = std::prev(it)->pose.orientation;
     }
+  }
+}
+
+void WaypointNav::visualize_wp(){
+  int cnt;
+  int waypoint_num = waypoints_.size();
+  geometry_msgs::Vector3 arrow; // config arrow shape
+  // x is arrow length
+  arrow.x = 0.02;
+  // y is arrow width
+  arrow.y = 0.04;
+  // z is arrow height
+  arrow.z = 0.1;
+
+  for(decltype(waypoints_)::iterator it = waypoints_.begin(); it != waypoints_.end(); cnt++, it++){
+    visualization_msgs::MarkerArray marker_wp;
+    marker_wp.markers.resize(waypoint_num);
+    marker_wp.markers[cnt].header.frame_id = world_frame_;
+    marker_wp.markers[cnt].header.stamp = ros::Time::now();
+    marker_wp.markers[cnt].ns = "visualization_waypoint";
+    marker_wp.markers[cnt].id = cnt;
+    marker_wp.markers[cnt].lifetime = ros::Duration();
+
+    marker_wp.markers[cnt].type = visualization_msgs::Marker::ARROW;
+    marker_wp.markers[cnt].action = visualization_msgs::Marker::ADD;
+    marker_wp.markers[cnt].scale= arrow;
+    marker_wp.markers[cnt].pose = it->pose;
+
+    marker_wp.markers[cnt].color.r = 0.0f;
+    marker_wp.markers[cnt].color.g = static_cast<float>(cnt) / static_cast<float>(waypoint_num);
+    marker_wp.markers[cnt].color.b = 1.0f;
+    marker_wp.markers[cnt].color.a = 0.0f;
   }
 }
 
@@ -257,6 +291,7 @@ int main(int argc, char** argv){
     return 1;
   }
   wp_nav.compute_orientation();
+  wp_nav.visualize_wp();
   wp_nav.run();
 
   return 0;
