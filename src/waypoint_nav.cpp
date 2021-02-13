@@ -33,11 +33,13 @@ public:
   double max_update_rate_;
   bool read_yaml();
   void compute_orientation();
-  bool startNavigationCallback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response);
-  bool suspendNavigationCallback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response);
   void run();
   void run_wp_once();
+  bool on_wp();
   void send_wp();
+  bool startNavigationCallback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response);
+  bool suspendNavigationCallback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response);
+
 private:
   actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> move_base_action_;
   std::list<Waypoints> waypoints_;
@@ -53,6 +55,8 @@ private:
   ros::Subscriber cmd_vel_sub_;
   ros::Publisher wp_pub_;
   ros::ServiceClient clear_costmaps_srv_;
+  tf2_ros::Buffer tfBuffer_;
+  tf2_ros::TransformListener tfListener_;
 };
 
 WaypointNav::WaypointNav() :
@@ -60,7 +64,8 @@ WaypointNav::WaypointNav() :
     rate_(1.0),
     last_moved_time_(0.0),
     loop_flg_(false),
-    suspend_flg_(true)
+    suspend_flg_(true),
+    tfListener_(tfBuffer_)
 {
   nh_.param("waypoint_nav/robot_frame", robot_frame_, std::string("/base_link"));
   nh_.param("waypoint_nav/world_frame", world_frame_, std::string("/map"));
@@ -139,36 +144,6 @@ void WaypointNav::compute_orientation(){
   }
 }
 
-bool WaypointNav::startNavigationCallback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response){
-  if(suspend_flg_ == true){
-    ROS_INFO("Cancel suspend mode!");
-    response.success = true;
-    response.message = std::string("turn off suspend");
-    suspend_flg_ = false;
-  }
-  else{
-    ROS_ERROR("Your robot already canceled suspend mode");
-    response.success = false;
-    return false;
-  }
-  return true;
-}
-
-bool WaypointNav::suspendNavigationCallback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response){
-  if(suspend_flg_ == false){
-    ROS_INFO("Go into suspend mode!");
-    response.success = true;
-    response.message = std::string("turn on suspend");
-    suspend_flg_ = true;
-  }
-  else{
-    ROS_ERROR("Your robot is already suspend mode");
-    response.success = false;
-    return false;
-  }
-  return true;
-}
-
 void WaypointNav::run(){
   while((move_base_action_.waitForServer(ros::Duration(1.0)) == false) && ros::ok()){
       ROS_INFO("Waiting...");
@@ -197,7 +172,7 @@ void WaypointNav::run_wp_once(){
       ros::spinOnce();
       rate_.sleep();
     }
-    else if(state_ == actionlib::SimpleClientGoalState::SUCCEEDED){
+    else if( !on_wp() || state_ == actionlib::SimpleClientGoalState::SUCCEEDED){
       ROS_INFO("Run next waypoint");
       break;
     }
@@ -205,6 +180,26 @@ void WaypointNav::run_wp_once(){
       resend_num_++;
     }
   }
+}
+
+bool WaypointNav::on_wp(){
+  geometry_msgs::TransformStamped transformStamped;
+  try{
+    transformStamped = tfBuffer_.lookupTransform(world_frame_, robot_frame_, ros::Time(0));
+  }
+  catch (tf2::TransformException &ex) {
+    ROS_WARN("%s",ex.what());
+    ros::Duration(1.0).sleep();
+    return false;
+  }
+
+  const double wp_x = transformStamped.transform.translation.x;
+  const double wp_y = transformStamped.transform.translation.y;
+  const double robot_x = current_waypoint_->pose.position.x;
+  const double robot_y = current_waypoint_->pose.position.y;
+  const double dist = std::hypot((wp_x - robot_x), (wp_y - robot_y));
+
+  return dist < dist_err_;
 }
 
 void WaypointNav::send_wp(){
@@ -219,6 +214,36 @@ void WaypointNav::send_wp(){
   if(current_waypoint_->function == "suspend"){
     suspend_flg_ = true;
   }
+}
+
+bool WaypointNav::startNavigationCallback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response){
+  if(suspend_flg_ == true){
+    ROS_INFO("Cancel suspend mode!");
+    response.success = true;
+    response.message = std::string("turn off suspend");
+    suspend_flg_ = false;
+  }
+  else{
+    ROS_ERROR("Your robot already canceled suspend mode");
+    response.success = false;
+    return false;
+  }
+  return true;
+}
+
+bool WaypointNav::suspendNavigationCallback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response){
+  if(suspend_flg_ == false){
+    ROS_INFO("Go into suspend mode!");
+    response.success = true;
+    response.message = std::string("turn on suspend");
+    suspend_flg_ = true;
+  }
+  else{
+    ROS_ERROR("Your robot is already suspend mode");
+    response.success = false;
+    return false;
+  }
+  return true;
 }
 
 int main(int argc, char** argv){
