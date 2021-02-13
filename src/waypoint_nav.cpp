@@ -215,6 +215,10 @@ void WaypointNav::send_wp(){
   move_base_goal.target_pose.pose.orientation = current_waypoint_->pose.orientation;
 
   move_base_action_.sendGoal(move_base_goal);
+
+  if(current_waypoint_->function == "suspend"){
+    suspend_flg_ = true;
+  }
 }
 
 int main(int argc, char** argv){
