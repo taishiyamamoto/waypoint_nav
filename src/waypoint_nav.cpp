@@ -38,6 +38,7 @@ public:
   void run_wp_once();
   bool on_wp();
   void send_wp();
+  void cmdVelCallback(const geometry_msgs::Twist::ConstPtr& cmd_vel_msg);
   bool startNavigationCallback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response);
   bool suspendNavigationCallback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response);
 
@@ -50,7 +51,8 @@ private:
   int resend_num_;
   bool loop_flg_;
   bool suspend_flg_;
-  double dist_err_, last_moved_time_;
+  double dist_err_;
+  double last_moved_time_;
   ros::Rate rate_;
   ros::ServiceServer start_server_, suspend_server_; 
   ros::Subscriber cmd_vel_sub_;
@@ -63,10 +65,10 @@ private:
 WaypointNav::WaypointNav() :
     move_base_action_("move_base", true),
     rate_(1.0),
-    last_moved_time_(0.0),
     loop_flg_(false),
     suspend_flg_(true),
-    tfListener_(tfBuffer_)
+    tfListener_(tfBuffer_),
+    last_moved_time_(ros::Time::now().toSec())
 {
   nh_.param("waypoint_nav/robot_frame", robot_frame_, std::string("/base_link"));
   nh_.param("waypoint_nav/world_frame", world_frame_, std::string("/map"));
@@ -80,11 +82,11 @@ WaypointNav::WaypointNav() :
   nh_.param("waypoint_nav/loop_flg", loop_flg_, false);
 
 
+  visualization_wp_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("visualization_wp", 1);
+  cmd_vel_sub_ = nh_.subscribe("cmd_vel", 1, &WaypointNav::cmdVelCallback, this);
   start_server_ = nh_.advertiseService("start_wp_nav", &WaypointNav::startNavigationCallback, this);
   suspend_server_ = nh_.advertiseService("suspend_wp_nav", &WaypointNav::suspendNavigationCallback, this);
-  visualization_wp_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("visualization_wp", 1);
-//  cmd_vel_sub_ = nh.subscribe("cmd_vel", 1, &WaypointNav::cmdVelCallback, this);
-//  clear_costmaps_srv_ = nh.serviceClient<std_srvs::Empty>("/move_base/clear_costmaps");
+//  clear_costmaps_srv_ = nh_.serviceClient<std_srvs::Empty>("/move_base/clear_costmaps");
 }
 
 bool WaypointNav::read_yaml(){
@@ -201,6 +203,7 @@ void WaypointNav::run_wp_once(){
   resend_num_ = 0;
   while((resend_num_ < 3) && ros::ok()){
     send_wp();
+    double time = ros::Time::now().toSec();
     actionlib::SimpleClientGoalState state_ = move_base_action_.getState();
     if(state_ == actionlib::SimpleClientGoalState::ACTIVE || 
        state_ == actionlib::SimpleClientGoalState::PENDING){
@@ -210,6 +213,9 @@ void WaypointNav::run_wp_once(){
     else if( !on_wp() || state_ == actionlib::SimpleClientGoalState::SUCCEEDED){
       ROS_INFO("Run next waypoint");
       break;
+    }
+    else if(time - last_moved_time_ > 10){
+      resend_num_++;
     }
     else{
       resend_num_++;
@@ -248,6 +254,21 @@ void WaypointNav::send_wp(){
 
   if(current_waypoint_->function == "suspend"){
     suspend_flg_ = true;
+  }
+}
+
+void WaypointNav::cmdVelCallback(const geometry_msgs::Twist::ConstPtr& cmd_vel_msg){
+  if(cmd_vel_msg->linear.x > -0.001 && cmd_vel_msg->linear.x < 0.001  &&
+    cmd_vel_msg->linear.y > -0.001 && cmd_vel_msg->linear.y < 0.001   &&
+    cmd_vel_msg->linear.z > -0.001 && cmd_vel_msg->linear.z < 0.001   &&
+    cmd_vel_msg->angular.x > -0.001 && cmd_vel_msg->angular.x < 0.001 &&
+    cmd_vel_msg->angular.y > -0.001 && cmd_vel_msg->angular.y < 0.001 &&
+    cmd_vel_msg->angular.z > -0.001 && cmd_vel_msg->angular.z < 0.001){
+    
+    ROS_INFO("command velocity all zero");
+  }
+  else{
+    last_moved_time_ = ros::Time::now().toSec();
   }
 }
 
