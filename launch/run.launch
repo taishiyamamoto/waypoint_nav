@@ -5,7 +5,7 @@
     <param name="robot_frame" value="base_link"/>
     <param name="world_frame" value="map"/>
     <param name="max_update_rate" value="1.0"/>
-    <param name="filename" value="/root/alpha.yaml"/>
+    <param name="filename" value="$(find waypoint_nav)/config/sample.yaml"/>
     <param name="dist_err" value="1.0"/>
     <param name="loop_flg" value="false"/>
   </node>
