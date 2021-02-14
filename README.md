@@ -52,8 +52,10 @@ waypoints:
     z:
     function:
 ```
-You can set some functions if you program.
-This program has two functions, "run" and "suspend".
+You can set some functions if you add function to source program.
+This program has two functions, "run" and "suspend".  
+However, "function" is not compulsory.  
+
 - run  
   This is normal mode.  
   When your robot gets at target waypoint, makes for next waypoint.
