@@ -162,6 +162,7 @@ void WaypointNav::compute_orientation(){
   }
 }
 
+// This function has a bug which can't visualize waypotins
 void WaypointNav::visualize_wp(){
   int cnt = 0;
   int waypoint_num = waypoints_.size();
