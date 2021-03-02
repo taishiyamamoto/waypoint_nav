@@ -164,15 +164,15 @@ void WaypointNav::visualize_wp(){
   int waypoint_num = waypoints_.size();
   geometry_msgs::Vector3 arrow; // config arrow shape
   // x is arrow length
-  arrow.x = 0.02;
+  arrow.x = 1.0;
   // y is arrow width
-  arrow.y = 0.04;
+  arrow.y = 0.1;
   // z is arrow height
-  arrow.z = 0.1;
+  arrow.z = 0.2;
 
   visualization_msgs::MarkerArray marker_wp;
+  marker_wp.markers.resize(waypoint_num);
   for(decltype(waypoints_)::iterator it = waypoints_.begin(); it != waypoints_.end(); cnt++, it++){
-    marker_wp.markers.resize(waypoint_num);
     marker_wp.markers[cnt].header.frame_id = world_frame_;
     marker_wp.markers[cnt].header.stamp = ros::Time::now();
     marker_wp.markers[cnt].ns = "visualization_waypoint";
@@ -187,7 +187,7 @@ void WaypointNav::visualize_wp(){
     marker_wp.markers[cnt].color.r = 0.0f;
     marker_wp.markers[cnt].color.g = static_cast<float>(cnt) / static_cast<float>(waypoint_num);
     marker_wp.markers[cnt].color.b = 1.0f;
-    marker_wp.markers[cnt].color.a = 0.0f;
+    marker_wp.markers[cnt].color.a = 1.0f;
   }
   ROS_INFO("Published waypoint marker");
   visualization_wp_pub_.publish(marker_wp);
@@ -219,7 +219,7 @@ void WaypointNav::run_wp(){
     if(loop_flg_){
       ROS_INFO("Start waypoint_nav again!");
     }
-  } while(loop_flg_);
+  } while(ros::ok() && loop_flg_);
   ROS_INFO("Finish waypoint_nav");
 }
 
