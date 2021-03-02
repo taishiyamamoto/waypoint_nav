@@ -1,12 +1,13 @@
 <launch>
   <node name="waypoint_nav" pkg="waypoint_nav" type="waypoint_nav" output="screen" >
-    <remap from="cmd_vel" to="cmd_vel/icart_mini" />
+    <remap from="cmd_vel" to="icart_mini/cmd_vel" />
 
     <param name="robot_frame" value="base_link"/>
     <param name="world_frame" value="map"/>
     <param name="max_update_rate" value="1.0"/>
     <param name="filename" value="$(find waypoint_nav)/config/sample.yaml"/>
     <param name="dist_err" value="1.0"/>
-    <param name="loop_flg" value="false"/>
+    <param name="loop_flg" value="true"/>
+    <param name="wait_time" value="3.0"/>
   </node>
 </launch>
