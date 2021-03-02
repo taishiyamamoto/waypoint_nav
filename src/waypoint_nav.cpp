@@ -56,6 +56,7 @@ private:
   double dist_err_;
   double last_moved_time_;
   double wait_time_;
+  int resend_thresh_;
   std::unordered_map<std::string, std::function<void(void)>> function_map_;
   ros::Rate rate_;
   ros::ServiceServer start_server_, suspend_server_; 
@@ -73,7 +74,8 @@ WaypointNav::WaypointNav() :
     suspend_flg_(true),
     tfListener_(tfBuffer_),
     last_moved_time_(ros::Time::now().toSec()),
-    wait_time_(5.0)
+    wait_time_(5.0),
+    resend_thresh_(3)
 {
   nh_.param("waypoint_nav/robot_frame", robot_frame_, std::string("/base_link"));
   nh_.param("waypoint_nav/world_frame", world_frame_, std::string("/map"));
@@ -86,6 +88,7 @@ WaypointNav::WaypointNav() :
 
   nh_.param("waypoint_nav/loop_flg", loop_flg_, false);
   nh_.param("waypoint_nav/wait_time", wait_time_, 5.0);
+  nh_.param("waypoint_nav/resend_thresh", resend_thresh_, 3);
 
   function_map_.insert(std::make_pair("run", std::bind(&WaypointNav::run, this)));
   function_map_.insert(std::make_pair("suspend", std::bind(&WaypointNav::suspend, this)));
@@ -256,7 +259,15 @@ void WaypointNav::send_wp(){
   move_base_goal.target_pose.pose.orientation = current_waypoint_->pose.orientation;
 
   move_base_action_.sendGoal(move_base_goal);
-  ros::Duration(0.5).sleep();
+
+
+  actionlib::SimpleClientGoalState state_ = move_base_action_.getState();
+
+  while(ros::ok() && (state_ != actionlib::SimpleClientGoalState::ACTIVE)){
+    ros::Duration(0.5);
+    state_ = move_base_action_.getState();
+  }
+  last_moved_time_ = ros::Time::now().toSec();
 }
 
 void WaypointNav::cmdVelCallback(const geometry_msgs::Twist::ConstPtr& cmd_vel_msg){
@@ -310,7 +321,7 @@ bool WaypointNav::suspendNavigationCallback(std_srvs::Trigger::Request &request,
 void WaypointNav::run(){
   int resend_num = 0;
   send_wp();
-  while((resend_num < 3) && ros::ok()){
+  while((resend_num < resend_thresh_) && ros::ok()){
     double time = ros::Time::now().toSec();
     actionlib::SimpleClientGoalState state_ = move_base_action_.getState();
     if(time - last_moved_time_ > wait_time_){
@@ -318,10 +329,9 @@ void WaypointNav::run(){
       ROS_WARN("Resend this waypoint");
       resend_num++;
       send_wp();
-      last_moved_time_ = ros::Time::now().toSec();
     }
     else if(state_ == actionlib::SimpleClientGoalState::ACTIVE || 
-      state_ == actionlib::SimpleClientGoalState::PENDING){
+            state_ == actionlib::SimpleClientGoalState::PENDING){
       ros::spinOnce();
       rate_.sleep();
     }
@@ -336,6 +346,10 @@ void WaypointNav::run(){
       resend_num++;
       send_wp();
     }
+  }
+  if(resend_num >= resend_thresh_){
+    ROS_ERROR("Cancel this waypoint because robot can't reach there");
+    move_base_action_.cancelAllGoals();
   }
 }
 
