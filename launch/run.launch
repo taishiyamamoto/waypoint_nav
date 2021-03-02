@@ -9,5 +9,6 @@
     <param name="dist_err" value="1.0"/>
     <param name="loop_flg" value="true"/>
     <param name="wait_time" value="3.0"/>
+    <param name="resend_thresh" value="3"/>
   </node>
 </launch>
