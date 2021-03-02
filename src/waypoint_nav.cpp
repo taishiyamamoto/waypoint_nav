@@ -55,6 +55,7 @@ private:
   bool suspend_flg_;
   double dist_err_;
   double last_moved_time_;
+  double wait_time_;
   std::unordered_map<std::string, std::function<void(void)>> function_map_;
   ros::Rate rate_;
   ros::ServiceServer start_server_, suspend_server_; 
@@ -71,7 +72,8 @@ WaypointNav::WaypointNav() :
     loop_flg_(false),
     suspend_flg_(true),
     tfListener_(tfBuffer_),
-    last_moved_time_(ros::Time::now().toSec())
+    last_moved_time_(ros::Time::now().toSec()),
+    wait_time_(5.0)
 {
   nh_.param("waypoint_nav/robot_frame", robot_frame_, std::string("/base_link"));
   nh_.param("waypoint_nav/world_frame", world_frame_, std::string("/map"));
@@ -83,6 +85,7 @@ WaypointNav::WaypointNav() :
   nh_.param("waypoint_nav/dist_err", dist_err_, 1.0);
 
   nh_.param("waypoint_nav/loop_flg", loop_flg_, false);
+  nh_.param("waypoint_nav/wait_time", wait_time_, 5.0);
 
   function_map_.insert(std::make_pair("run", std::bind(&WaypointNav::run, this)));
   function_map_.insert(std::make_pair("suspend", std::bind(&WaypointNav::suspend, this)));
@@ -91,7 +94,7 @@ WaypointNav::WaypointNav() :
   cmd_vel_sub_ = nh_.subscribe("cmd_vel", 1, &WaypointNav::cmdVelCallback, this);
   start_server_ = nh_.advertiseService("start_wp_nav", &WaypointNav::startNavigationCallback, this);
   suspend_server_ = nh_.advertiseService("suspend_wp_nav", &WaypointNav::suspendNavigationCallback, this);
-//  clear_costmaps_srv_ = nh_.serviceClient<std_srvs::Empty>("/move_base/clear_costmaps");
+  clear_costmaps_srv_ = nh_.serviceClient<std_srvs::Empty>("/move_base/clear_costmaps");
 }
 
 bool WaypointNav::read_yaml(){
@@ -167,8 +170,8 @@ void WaypointNav::visualize_wp(){
   // z is arrow height
   arrow.z = 0.1;
 
+  visualization_msgs::MarkerArray marker_wp;
   for(decltype(waypoints_)::iterator it = waypoints_.begin(); it != waypoints_.end(); cnt++, it++){
-    visualization_msgs::MarkerArray marker_wp;
     marker_wp.markers.resize(waypoint_num);
     marker_wp.markers[cnt].header.frame_id = world_frame_;
     marker_wp.markers[cnt].header.stamp = ros::Time::now();
@@ -186,6 +189,8 @@ void WaypointNav::visualize_wp(){
     marker_wp.markers[cnt].color.b = 1.0f;
     marker_wp.markers[cnt].color.a = 0.0f;
   }
+  ROS_INFO("Published waypoint marker");
+  visualization_wp_pub_.publish(marker_wp);
 }
 
 void WaypointNav::run_wp(){
@@ -193,25 +198,29 @@ void WaypointNav::run_wp(){
       ROS_INFO("Waiting...");
   }
 
-  while(ros::ok()){
-    // If loop_flg_ is true, do_while loop infinitely
-    do{
-      for(current_waypoint_ = waypoints_.begin(); (current_waypoint_ != waypoints_.end()) && ros::ok(); current_waypoint_++){
-        if(!suspend_flg_){
-          // execute a function depending on "function" written in yaml
-          auto func_it = function_map_.find(current_waypoint_->function);
-          if (func_it != function_map_.end()){
-            func_it->second();
-          }
-          else{
-            ROS_ERROR_STREAM("Function " + current_waypoint_->function + " Is Not Found.");
-          }
+  // If loop_flg_ is true, do_while loop infinitely
+  do{
+    current_waypoint_ = waypoints_.begin();
+    while((current_waypoint_ != waypoints_.end()) && ros::ok()){
+      if(!suspend_flg_){
+      // execute a function depending on "function" written in yaml
+        auto func_it = function_map_.find(current_waypoint_->function);
+        if (func_it != function_map_.end()){
+          func_it->second();
+          current_waypoint_++;
         }
-        ros::spinOnce();
-        rate_.sleep();
+        else{
+          ROS_ERROR_STREAM("Function " + current_waypoint_->function + " Is Not Found.");
+        }
       }
-    } while(loop_flg_);
-  }
+      ros::spinOnce();
+      rate_.sleep();
+    }
+    if(loop_flg_){
+      ROS_INFO("Start waypoint_nav again!");
+    }
+  } while(loop_flg_);
+  ROS_INFO("Finish waypoint_nav");
 }
 
 bool WaypointNav::on_wp(){
@@ -234,6 +243,12 @@ bool WaypointNav::on_wp(){
 }
 
 void WaypointNav::send_wp(){
+  std_srvs::Empty empty;
+  while(!clear_costmaps_srv_.call(empty)) {
+    ROS_WARN("Resend clear costmap service");
+    ros::Duration(0.5).sleep();
+   }
+
   move_base_msgs::MoveBaseGoal move_base_goal;
   move_base_goal.target_pose.header.stamp = ros::Time::now();
   move_base_goal.target_pose.header.frame_id = world_frame_;
@@ -265,6 +280,7 @@ bool WaypointNav::startNavigationCallback(std_srvs::Trigger::Request &request, s
     response.success = true;
     response.message = std::string("turn off suspend");
     suspend_flg_ = false;
+    last_moved_time_ = ros::Time::now().toSec();
   }
   else{
     ROS_ERROR("Your robot already canceled suspend mode");
@@ -293,12 +309,19 @@ bool WaypointNav::suspendNavigationCallback(std_srvs::Trigger::Request &request,
 // Main loop function's name is run_wp()
 void WaypointNav::run(){
   int resend_num = 0;
+  send_wp();
   while((resend_num < 3) && ros::ok()){
-    send_wp();
     double time = ros::Time::now().toSec();
     actionlib::SimpleClientGoalState state_ = move_base_action_.getState();
-    if(state_ == actionlib::SimpleClientGoalState::ACTIVE || 
-       state_ == actionlib::SimpleClientGoalState::PENDING){
+    if(time - last_moved_time_ > wait_time_){
+      ROS_WARN("Robot can't reach this waypoint");
+      ROS_WARN("Resend this waypoint");
+      resend_num++;
+      send_wp();
+      last_moved_time_ = ros::Time::now().toSec();
+    }
+    else if(state_ == actionlib::SimpleClientGoalState::ACTIVE || 
+      state_ == actionlib::SimpleClientGoalState::PENDING){
       ros::spinOnce();
       rate_.sleep();
     }
@@ -307,12 +330,11 @@ void WaypointNav::run(){
       ROS_INFO("Run next waypoint");
       break;
     }
-    else if(time - last_moved_time_ > 10){
-      resend_num++;
-      last_moved_time_ = ros::Time::now().toSec();
-    }
     else{
+      ROS_WARN("Robot can't reach this waypoint");
+      ROS_WARN("Resend this waypoint");
       resend_num++;
+      send_wp();
     }
   }
 }
