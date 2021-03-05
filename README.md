@@ -24,7 +24,7 @@ $ rosservice call /start_wp_nav "{}"
 
 ## Settings
 ### ROS Param
-For detail, see [run.launch](https://github.com/tiger0421/waypoint_nav/blob/develop/launch/run.launch)
+For detail, see [run.launch](https://github.com/tiger0421/waypoint_nav/blob/main/launch/run.launch)
 - robot_frame  
   ex) base_link
 
@@ -63,7 +63,7 @@ waypoints:
 You can set some functions if you add function to source program.  
 This program has two functions, "run" and "suspend".  
 However, "function" is not compulsory.  
-See this [sample.yaml](https://github.com/tiger0421/waypoint_nav/blob/develop/config/sample.yaml)
+See this [sample.yaml](https://github.com/tiger0421/waypoint_nav/blob/main/config/sample.yaml)
 
 - run  
   This is normal mode.  
