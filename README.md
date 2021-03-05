@@ -43,6 +43,14 @@ For detail, see run.launch
 - loop_flg  
   If this flg is true, do all over again after arriving at last waypoint
 
+- wait_time  
+  This is a time which your robot waits for moving  
+  Send a waypoint again, if your robot doesn't move for this time
+
+- resend_thresh  
+  This is a threshold which how many times to resend the waypoint  
+  Skip the waypoint if this threshold is over
+
 ### Yaml Setting
 ```
 waypoints:
@@ -73,3 +81,10 @@ When you want a robot to set suspend mode, call `rosservice` like below.
 `
 $ rosservice call /suspend_wp_nav "{}"
 `
+
+## Movie
+- loop version  
+https://youtu.be/wfdGHEg-MH8
+
+- an obstacle on a waypoint  
+https://youtu.be/jAFC4Dceedw
