@@ -60,7 +60,7 @@ waypoints:
     z:
     function:
 ```
-You can set some functions if you add function to source program.
+You can set some functions if you add function to source program.  
 This program has two functions, "run" and "suspend".  
 However, "function" is not compulsory.  
 
