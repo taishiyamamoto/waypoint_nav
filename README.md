@@ -24,7 +24,7 @@ $ rosservice call /start_wp_nav "{}"
 
 ## Settings
 ### ROS Param
-For detail, see run.launch
+For detail, see [run.launch](https://github.com/tiger0421/waypoint_nav/blob/develop/launch/run.launch)
 - robot_frame  
   ex) base_link
 
