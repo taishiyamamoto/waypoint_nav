@@ -85,7 +85,7 @@ $ rosservice call /suspend_wp_nav "{}"
 
 ## Movie
 - loop version  
-https://youtu.be/wfdGHEg-MH8
+https://youtu.be/5eXg1V7NM3A
 
 - an obstacle on a waypoint  
-https://youtu.be/jAFC4Dceedw
+https://youtu.be/TDLN0mZlM6w
