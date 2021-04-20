@@ -228,3 +228,10 @@ target_link_libraries(
     ${catkin_LIBRARIES}
     ${yaml-cpp_LIBRARIES}
 )
+
+add_executable(waypoint_saver src/waypoint_saver.cpp)
+target_link_libraries(
+    waypoint_saver
+    ${catkin_LIBRARIES}
+    ${yaml-cpp_LIBRARIES}
+)
