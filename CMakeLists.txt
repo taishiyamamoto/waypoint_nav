@@ -17,6 +17,8 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   sensor_msgs
   std_msgs
+  visualization_msgs
+  interactive_markers
   tf
   tf2
   tf2_ros
@@ -221,6 +223,13 @@ include_directories(
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
+
+add_executable(waypoint_editor src/waypoint_editor.cpp)
+target_link_libraries(
+    waypoint_editor
+    ${catkin_LIBRARIES}
+    ${yaml-cpp_LIBRARIES}
+)
 
 add_executable(waypoint_nav src/waypoint_nav.cpp)
 target_link_libraries(
