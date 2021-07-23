@@ -34,6 +34,7 @@ private:
     std::string filename_;
     std::string map_frame_;
     std::vector<Waypoints> waypoints_;
+    std::vector<std::string> function_list_;
 
     ros::NodeHandle nh_;
     ros::NodeHandle pnh_;
@@ -58,6 +59,7 @@ public:
     void initMenu(void);
     void wpDeleteCb(const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback);
     void wpInsertCb(const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback);
+    void funcChangeCb(const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback);
 
     void makeWpInteractiveMarker(std::string name, geometry_msgs::Point point);
     void makeWpsInteractiveMarker(void);
@@ -79,6 +81,7 @@ WaypointEditor::WaypointEditor() : filename_(""), nh_(), pnh_("~"), rate_(2)
 {
     pnh_.param("filename", filename_, std::string("sample.yaml"));
     pnh_.param("map_frame",map_frame_,std::string("map"));
+    pnh_.param("function_list",function_list_,{"run","suspend"});
 
     if(!read_yaml()){
         ROS_ERROR("exit waypoint editor node");
@@ -173,11 +176,20 @@ WaypointEditor::save_yaml(){
   
 void
 WaypointEditor::initMenu(){
-    interactive_markers::MenuHandler::EntryHandle wp_delete_menu_handler = wp_menu_handler_.insert("delete", std::bind(&WaypointEditor::wpDeleteCb, this,std::placeholders::_1));
+    interactive_markers::MenuHandler::EntryHandle wp_delete_menu_handler = wp_menu_handler_.insert("Delete", std::bind(&WaypointEditor::wpDeleteCb, this,std::placeholders::_1));
     interactive_markers::MenuHandler::EntryHandle wp_insert_menu_handler = wp_menu_handler_.insert("Insert");
 
     interactive_markers::MenuHandler::EntryHandle wp_mode = wp_menu_handler_.insert(wp_insert_menu_handler, "Prev", std::bind(&WaypointEditor::wpInsertCb, this, std::placeholders::_1));
     wp_mode = wp_menu_handler_.insert(wp_insert_menu_handler, "Next", std::bind(&WaypointEditor::wpInsertCb, this, std::placeholders::_1));
+
+    interactive_markers::MenuHandler::EntryHandle wp_function_menu_handler = wp_menu_handler_.insert("Function");
+
+    interactive_markers::MenuHandler::EntryHandle function_mode;
+    for (int i = 0; i < function_list_.size(); i++)
+    {
+        function_mode = wp_menu_handler_.insert(wp_function_menu_handler, function_list_[i], std::bind(&WaypointEditor::funcChangeCb, this, std::placeholders::_1));
+    }
+
 }
 
 void 
@@ -221,6 +233,27 @@ WaypointEditor::wpInsertCb(const visualization_msgs::InteractiveMarkerFeedbackCo
         server_->setPose(std::to_string(i), p);
     }
     makeWpInteractiveMarker(std::to_string(waypoints_.size()-1), waypoints_[waypoints_.size()-1].pose.position);
+    server_->applyChanges();
+}
+
+void
+WaypointEditor::funcChangeCb(const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback){
+    ROS_INFO("Switching to menu entry #%d", feedback->menu_entry_id);
+    
+    int wp_num= std::stoi(feedback->marker_name);
+
+    if (feedback->menu_entry_id == 6)
+    {
+        ROS_INFO("run Button Click Detected");
+        waypoints_[wp_num].function = std::string("run");
+    }
+    else if (feedback->menu_entry_id == 7)
+    {
+        ROS_INFO("Suspend Button Click Detected");
+        waypoints_[wp_num].function = std::string("suspend");
+    }
+
+    wp_menu_handler_.reApply( *server_ );
     server_->applyChanges();
 }
 
@@ -310,14 +343,6 @@ WaypointEditor::processFeedback(const visualization_msgs::InteractiveMarkerFeedb
     server_->applyChanges();
 
     waypoints_[std::stoi(feedback->marker_name)].pose.position = feedback->pose.position;
-
-    /*
-    if (feedback->marker_name == "finish_pose") {
-        finish_pose_.pose = feedback->pose;
-    } else {
-        waypoints_.at(std::stoi(feedback->marker_name)) = feedback->pose.position;
-    }
-    */
 }
 
 void 
