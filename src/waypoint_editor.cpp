@@ -37,9 +37,10 @@ private:
 
     ros::NodeHandle nh_;
     ros::NodeHandle pnh_;
-    ros::Subscriber waypoints_sub_;
-    ros::Publisher marker_description_pub_;
-    visualization_msgs::MarkerArray marker_description_;
+    ros::Publisher marker_id_pub_;
+    ros::Publisher marker_func_pub_;
+    visualization_msgs::MarkerArray marker_id_description_;
+    visualization_msgs::MarkerArray marker_func_description_;
     ros::ServiceServer save_server_;
 
     ros::Rate rate_;
@@ -54,7 +55,7 @@ public:
     bool read_yaml(void);
     bool save_yaml(void);
 
-    void make_menu(void);
+    void initMenu(void);
     void wpDeleteCb(const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback);
     void wpInsertCb(const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback);
 
@@ -66,8 +67,8 @@ public:
     void processFeedback(const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback);
 
     Marker makeWpMarker(void);
-    void waypointCallback(const geometry_msgs::PointStamped &msg);
-    void publishMarkerDescription(void);
+    void publishMarkerIdDescription(void);
+    void publishMarkerFuncDescription(void);
     bool saveWaypointCallback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response);
 
     void run(void);
@@ -85,12 +86,14 @@ WaypointEditor::WaypointEditor() : filename_(""), nh_(), pnh_("~"), rate_(2)
     }
 
     server_.reset(new interactive_markers::InteractiveMarkerServer("waypoints_marker_server", "", false));
-    make_menu();
+    initMenu();
 
-    ros::NodeHandle nh;
-    waypoints_sub_ = nh.subscribe("waypoints_viz", 1, &WaypointEditor::waypointCallback, this);
-    marker_description_pub_ = nh.advertise<visualization_msgs::MarkerArray>("marker_descriptions",1);
-    save_server_ = nh.advertiseService("save_waypoint", &WaypointEditor::saveWaypointCallback, this);
+    makeWpsInteractiveMarker();
+    server_->applyChanges();
+
+    marker_id_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("marker_id_descriptions",1);
+    marker_func_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("marker_func_descriptions",1);
+    save_server_ = nh_.advertiseService("save_waypoint", &WaypointEditor::saveWaypointCallback, this);
 }
 
 WaypointEditor::~WaypointEditor()
@@ -131,7 +134,7 @@ bool WaypointEditor::read_yaml(){
         function = "run";
       }
       waypoints_.push_back({pose, function});
-      }
+    }
     ROS_INFO_STREAM(waypoints_.size() << " waypoints is read");
     return true;
   }
@@ -169,7 +172,7 @@ WaypointEditor::save_yaml(){
     }
   
 void
-WaypointEditor::make_menu(){
+WaypointEditor::initMenu(){
     interactive_markers::MenuHandler::EntryHandle wp_delete_menu_handler = wp_menu_handler_.insert("delete", std::bind(&WaypointEditor::wpDeleteCb, this,std::placeholders::_1));
     interactive_markers::MenuHandler::EntryHandle wp_insert_menu_handler = wp_menu_handler_.insert("Insert");
 
@@ -260,6 +263,21 @@ WaypointEditor::makeWpControl(InteractiveMarker &msg) {
         return msg.controls.back();
     }
 
+Marker
+WaypointEditor::makeWpMarker(){
+    Marker marker;
+    marker.type = Marker::SPHERE;
+    marker.scale.x = 0.8;
+    marker.scale.y = 0.8;
+    marker.scale.z = 0.8;
+    marker.color.r = 0.08;
+    marker.color.g = 0.0;
+    marker.color.b = 0.8;
+    marker.color.a = 0.5;
+
+    return marker;
+}
+
 void 
 WaypointEditor::processFeedback(const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback){
     std::ostringstream s;
@@ -302,60 +320,59 @@ WaypointEditor::processFeedback(const visualization_msgs::InteractiveMarkerFeedb
     */
 }
 
-Marker
-WaypointEditor::makeWpMarker(){
-    Marker marker;
-    marker.type = Marker::SPHERE;
-    marker.scale.x = 0.8;
-    marker.scale.y = 0.8;
-    marker.scale.z = 0.8;
-    marker.color.r = 0.08;
-    marker.color.g = 0.0;
-    marker.color.b = 0.8;
-    marker.color.a = 0.5;
-
-    return marker;
-}
-
 void 
-WaypointEditor::waypointCallback(const geometry_msgs::PointStamped &msg){
-    ROS_INFO_STREAM("point = " << msg);
-    makeWpInteractiveMarker(std::to_string(waypoints_.size()), msg.point);
-    server_->applyChanges();
-    
-    geometry_msgs::Pose pose;
-    pose.position.x=msg.point.x;
-    pose.position.y=msg.point.y;
-    pose.position.z=msg.point.z;
-    waypoints_.push_back({pose,"run"});
-}
-
-void 
-WaypointEditor::publishMarkerDescription(){
-        marker_description_.markers.clear();
-        for(int i=0; i!=waypoints_.size(); i++){
-            Marker marker;
-            marker.type = Marker::TEXT_VIEW_FACING;
-            marker.text = std::to_string(i);
-            marker.header.frame_id = map_frame_;
-            marker.header.stamp = ros::Time(0);
-            std::stringstream name;
-            name << "waypoint";
-            marker.ns = name.str();
-            marker.id = i;
-            marker.lifetime = ros::Duration(0.5);
-            marker.pose.position = waypoints_[i].pose.position;
-            marker.pose.position.z = 3.0;
-            marker.scale.z = 2.0;
-            marker.color.r = 0.0;
-            marker.color.g = 0.0;
-            marker.color.b = 0.0;
-            marker.color.a = 1.0;
-            marker.action = visualization_msgs::Marker::ADD;
-            marker_description_.markers.push_back(marker);
-        }
-        marker_description_pub_.publish(marker_description_);
+WaypointEditor::publishMarkerIdDescription(){
+    marker_id_description_.markers.clear();
+    for(int i=0; i!=waypoints_.size(); i++){
+        Marker marker;
+        marker.type = Marker::TEXT_VIEW_FACING;
+        marker.text = std::to_string(i);
+        marker.header.frame_id = map_frame_;
+        marker.header.stamp = ros::Time(0);
+        std::stringstream name;
+        name << "waypoint";
+        marker.ns = name.str();
+        marker.id = i;
+        marker.lifetime = ros::Duration(0.5);
+        marker.pose.position = waypoints_[i].pose.position;
+        marker.pose.position.z = 4.0;
+        marker.scale.z = 2.0;
+        marker.color.r = 0.0;
+        marker.color.g = 0.0;
+        marker.color.b = 0.0;
+        marker.color.a = 1.0;
+        marker.action = visualization_msgs::Marker::ADD;
+        marker_id_description_.markers.push_back(marker);
     }
+    marker_id_pub_.publish(marker_id_description_);
+}
+
+void 
+WaypointEditor::publishMarkerFuncDescription(){
+    marker_func_description_.markers.clear();
+    for(int i=0; i!=waypoints_.size(); i++){
+        Marker marker;
+        marker.type = Marker::TEXT_VIEW_FACING;
+        marker.text = waypoints_[i].function;
+        marker.header.frame_id = map_frame_;
+        marker.header.stamp = ros::Time(0);
+        std::stringstream name;
+        name << "waypoint";
+        marker.ns = name.str();
+        marker.id = i;
+        marker.lifetime = ros::Duration(0.5);
+        marker.pose.position = waypoints_[i].pose.position;
+        marker.pose.position.z = 2.0;
+        marker.scale.z = 2.0;
+        marker.color.r = 0.0;
+        marker.color.g = 0.0;
+        marker.color.b = 0.0;
+        marker.color.a = 1.0;
+        marker.action = visualization_msgs::Marker::ADD;
+        marker_func_description_.markers.push_back(marker);
+    }
+    marker_func_pub_.publish(marker_func_description_);
+}
 
 bool 
 WaypointEditor::saveWaypointCallback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response) {
@@ -373,7 +390,8 @@ WaypointEditor::run() {
     while(ros::ok()){
         rate_.sleep();
         ros::spinOnce();
-        publishMarkerDescription();
+        publishMarkerIdDescription();
+        publishMarkerFuncDescription();
     }
 }
 
