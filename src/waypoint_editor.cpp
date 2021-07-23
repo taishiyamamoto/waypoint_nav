@@ -216,12 +216,14 @@ WaypointEditor::wpInsertCb(const visualization_msgs::InteractiveMarkerFeedbackCo
     ROS_INFO_STREAM("insert : " << feedback->menu_entry_id);
 
     geometry_msgs::Pose p = feedback->pose;
-    std::string function = "run";
+    std::string function = function_list_[0];
 
+    // If you change menu handler, you must modify "3". 
     if (feedback->menu_entry_id == 3){
         p.position.x -= 1.0;
         waypoints_.insert(waypoints_.begin() + wp_num, {p,function});
 
+    // If you change menu handler, you must modify "4". 
     } else if (feedback->menu_entry_id == 4) {
         p.position.x += + 1.0;
         waypoints_.insert(waypoints_.begin() + wp_num + 1, {p,function});
@@ -241,16 +243,15 @@ WaypointEditor::funcChangeCb(const visualization_msgs::InteractiveMarkerFeedback
     ROS_INFO("Switching to menu entry #%d", feedback->menu_entry_id);
     
     int wp_num= std::stoi(feedback->marker_name);
+    // If you change menu handler, you must modify "6". 
+    int func_entry_id = 6;
 
-    if (feedback->menu_entry_id == 6)
+    for (int i = func_entry_id,j = 0; i < func_entry_id + function_list_.size(),j<function_list_.size(); i++,j++)
     {
-        ROS_INFO("run Button Click Detected");
-        waypoints_[wp_num].function = std::string("run");
-    }
-    else if (feedback->menu_entry_id == 7)
-    {
-        ROS_INFO("Suspend Button Click Detected");
-        waypoints_[wp_num].function = std::string("suspend");
+        if (feedback->menu_entry_id == i){
+            ROS_INFO("Function Mode Change: %s",function_list_[j].c_str());
+            waypoints_[wp_num].function = function_list_[j];
+        }
     }
 
     wp_menu_handler_.reApply( *server_ );
