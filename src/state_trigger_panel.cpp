@@ -19,18 +19,18 @@ StateTriggerPanel::StateTriggerPanel( QWidget* parent )
   : rviz::Panel( parent )
 {
   start_client_ = nh_.serviceClient<std_srvs::Trigger>("start_wp_nav", false);
-  resume_client_ = nh_.serviceClient<std_srvs::Trigger>("resume_nav", false);
+  suspend_client_ = nh_.serviceClient<std_srvs::Trigger>("suspend_wp_nav", false);
 
   start_nav_button_ = new QPushButton("StartWaypointsNavigation");
-  resume_nav_button_ = new QPushButton("ResumeWaypointsNavigation");
+  suspend_nav_button_ = new QPushButton("SuspendWaypointsNavigation");
 
   QHBoxLayout* layout = new QHBoxLayout;
   layout->addWidget(start_nav_button_);
-  layout->addWidget(resume_nav_button_);
+  layout->addWidget(suspend_nav_button_);
   setLayout( layout );
   
   connect(start_nav_button_, SIGNAL(clicked()), this, SLOT(pushStartNavigation()));
-  connect(resume_nav_button_, SIGNAL(clicked()), this, SLOT(pushResumeNavigation()));
+  connect(suspend_nav_button_, SIGNAL(clicked()), this, SLOT(pushSuspendNavigation()));
 }
 
 void StateTriggerPanel::save( rviz::Config config ) const
@@ -50,11 +50,11 @@ void StateTriggerPanel::pushStartNavigation() {
     start_client_.call(trigger);
 }
 
-void StateTriggerPanel::pushResumeNavigation() {
-    ROS_INFO("Service call: resume waypoints navigation");
+void StateTriggerPanel::pushSuspendNavigation() {
+    ROS_INFO("Service call: suspend waypoints navigation");
     
     std_srvs::Trigger trigger;
-    resume_client_.call(trigger);
+    suspend_client_.call(trigger);
 }
 
 } // end namespace waypoint_nav
