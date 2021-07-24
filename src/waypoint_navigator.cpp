@@ -30,6 +30,7 @@ class WaypointNav{
 public:
   WaypointNav();
   ros::NodeHandle nh_;
+  ros::NodeHandle pnh_;
   double max_update_rate_;
   bool read_yaml();
   void compute_orientation();
@@ -68,6 +69,8 @@ private:
 };
 
 WaypointNav::WaypointNav() :
+    nh_(),
+    pnh_("~"),
     move_base_action_("move_base", true),
     rate_(1.0),
     loop_flg_(false),
@@ -77,18 +80,18 @@ WaypointNav::WaypointNav() :
     wait_time_(5.0),
     resend_thresh_(3)
 {
-  nh_.param("waypoint_nav/robot_frame", robot_frame_, std::string("/base_link"));
-  nh_.param("waypoint_nav/world_frame", world_frame_, std::string("/map"));
+  pnh_.param("robot_frame", robot_frame_, std::string("base_link"));
+  pnh_.param("world_frame", world_frame_, std::string("map"));
 
-  nh_.param("waypoint_nav/max_update_rate", max_update_rate_, 1.0);
+  pnh_.param("max_update_rate", max_update_rate_, 1.0);
   ros::Rate rate_(max_update_rate_);
 
-  nh_.param("waypoint_nav/filename", filename_, filename_);
-  nh_.param("waypoint_nav/dist_err", dist_err_, 1.0);
+  pnh_.param("filename", filename_, filename_);
+  pnh_.param("dist_err", dist_err_, 1.0);
 
-  nh_.param("waypoint_nav/loop_flg", loop_flg_, false);
-  nh_.param("waypoint_nav/wait_time", wait_time_, 5.0);
-  nh_.param("waypoint_nav/resend_thresh", resend_thresh_, 3);
+  pnh_.param("loop_flg", loop_flg_, false);
+  pnh_.param("wait_time", wait_time_, 5.0);
+  pnh_.param("resend_thresh", resend_thresh_, 3);
 
   function_map_.insert(std::make_pair("run", std::bind(&WaypointNav::run, this)));
   function_map_.insert(std::make_pair("suspend", std::bind(&WaypointNav::suspend, this)));
@@ -237,11 +240,11 @@ bool WaypointNav::on_wp(){
     return false;
   }
 
-  const double wp_x = transformStamped.transform.translation.x;
-  const double wp_y = transformStamped.transform.translation.y;
-  const double robot_x = current_waypoint_->pose.position.x;
-  const double robot_y = current_waypoint_->pose.position.y;
-  const double dist = std::hypot((wp_x - robot_x), (wp_y - robot_y));
+  double wp_x = transformStamped.transform.translation.x;
+  double wp_y = transformStamped.transform.translation.y;
+  double robot_x = current_waypoint_->pose.position.x;
+  double robot_y = current_waypoint_->pose.position.y;
+  double dist = std::hypot((wp_x - robot_x), (wp_y - robot_y));
 
   return dist < dist_err_;
 }
@@ -331,15 +334,15 @@ void WaypointNav::run(){
       resend_num++;
       send_wp();
     }
+    else if( on_wp() || state_ == actionlib::SimpleClientGoalState::SUCCEEDED){
+      ROS_INFO("Reach target waypoint!");
+      ROS_INFO("Run next waypoint");
+      break;
+    }
     else if(state_ == actionlib::SimpleClientGoalState::ACTIVE || 
             state_ == actionlib::SimpleClientGoalState::PENDING){
       ros::spinOnce();
       rate_.sleep();
-    }
-    else if( !on_wp() || state_ == actionlib::SimpleClientGoalState::SUCCEEDED){
-      ROS_INFO("Reach target waypoint!");
-      ROS_INFO("Run next waypoint");
-      break;
     }
     else{
       ROS_WARN("Robot can't reach this waypoint");
