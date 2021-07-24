@@ -96,7 +96,7 @@ WaypointEditor::WaypointEditor() : filename_(""), nh_(), pnh_("~"), rate_(2)
 
     marker_id_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("marker_id_descriptions",1);
     marker_func_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("marker_func_descriptions",1);
-    save_server_ = nh_.advertiseService("save_waypoint", &WaypointEditor::saveWaypointCallback, this);
+    save_server_ = nh_.advertiseService("save_waypoints", &WaypointEditor::saveWaypointCallback, this);
 }
 
 WaypointEditor::~WaypointEditor()
