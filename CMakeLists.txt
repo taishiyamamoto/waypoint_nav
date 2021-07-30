@@ -48,7 +48,7 @@ endif()
 add_definitions(-DQT_NO_KEYWORDS)
 
 catkin_package(
-  #INCLUDE_DIRS include
+  INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
 #  CATKIN_DEPENDS actionlib actionlib_msgs message_generation roscpp rospy sensor_msgs std_msgs tf tf2 tf2_ros yaml-cpp
 #  DEPENDS system_lib
@@ -59,7 +59,7 @@ catkin_package(
 ###########
 
 include_directories(
-  #include
+  include
   ${catkin_INCLUDE_DIRS}
   ${yaml-cpp_INCLUDE_DIRS}
 )
@@ -73,7 +73,12 @@ set(SRC_FILES
   src/state_trigger_panel.cpp
 )
 
-add_library(${PROJECT_NAME} ${SRC_FILES})
+set(HEADER_FILES
+  include/save_trigger_panel.h
+  include/state_trigger_panel.h
+)
+
+add_library(${PROJECT_NAME} ${SRC_FILES} ${HEADER_FILES})
 target_link_libraries(
   ${PROJECT_NAME} 
   ${QT_LIBRARIES} 
