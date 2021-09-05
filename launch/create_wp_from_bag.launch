@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<launch>
+    <arg name="map_file" default="$(find waypoint_nav)/maps/mymap"/>
+    <arg name="waypoints_file" default="$(find waypoint_nav)/config/sample.yaml"/>
+    <arg name="bag_file" default="$(find waypoint_nav)/bags/sample.bag"/>
+
+    <node pkg="map_server" type="map_server" name="map_server" args="$(arg map_file).yaml"/>
+
+    <node pkg="waypoint_nav" type="waypoint_saver" name="waypoint_saver" output="screen">
+        <param name="filename" value="$(arg waypoints_file)"/>
+        <param name="save_joy_button" value="0"/>
+        <param name="robot_frame" value="base_link"/>
+        <param name="world_frame" value="map"/>
+    </node>
+
+    <node pkg="rosbag" type="play" name="rosbag_play" args="$(arg bag_file)"/>
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find waypoint_nav)/rviz/editor.rviz" />
+</launch>

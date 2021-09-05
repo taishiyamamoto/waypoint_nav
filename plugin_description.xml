@@ -6,6 +6,13 @@
             TODO
         </description>
     </class>
+    <class name="waypoint_nav/CreateTriggerPanel"
+        type="waypoint_nav::CreateTriggerPanel"
+        base_class_type="rviz::Panel">
+        <description>
+            TODO
+        </description>
+    </class>
     <class name="waypoint_nav/StateTriggerPanel"
         type="waypoint_nav::StateTriggerPanel"
         base_class_type="rviz::Panel">

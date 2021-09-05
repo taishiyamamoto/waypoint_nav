@@ -69,11 +69,13 @@ link_directories(
 )
 
 set(SRC_FILES
+  src/create_trigger_panel.cpp
   src/save_trigger_panel.cpp
   src/state_trigger_panel.cpp
 )
 
 set(HEADER_FILES
+  include/create_trigger_panel.h
   include/save_trigger_panel.h
   include/state_trigger_panel.h
 )
