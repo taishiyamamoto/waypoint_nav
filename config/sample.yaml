@@ -8,7 +8,7 @@ waypoints:
         x: 0.952
         y: -4.48
         z: 0.000
-        function: suspend
+        function: line_tracking
     - point:
         x: 6.105
         y: -0.367

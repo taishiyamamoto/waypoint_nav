@@ -5,6 +5,7 @@
 #include <geometry_msgs/PoseArray.h>
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/TransformStamped.h>
+#include <sensor_msgs/LaserScan.h>
 #include <move_base_msgs/MoveBaseAction.h>
 #include <actionlib/client/simple_action_client.h>
 #include <tf2_ros/transform_listener.h>
@@ -43,9 +44,13 @@ public:
   bool startNavigationCallback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response);
   bool suspendNavigationCallback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response);
 
+  void scanCallback(const sensor_msgs::LaserScan::ConstPtr& scan_msg);
+  double get_min_scan_data(const sensor_msgs::LaserScan::ConstPtr& scan_msg, double degree);
+
 // declear functions which is called by depending on "function" in yaml
   void run();
   void suspend();
+  void line_tracking();
 
 private:
   actionlib::SimpleActionClient<move_base_msgs::MoveBaseAction> move_base_action_;
@@ -68,6 +73,11 @@ private:
   ros::Timer timer_;
   tf2_ros::Buffer tfBuffer_;
   tf2_ros::TransformListener tfListener_;
+
+  bool line_tracking_flg_;
+  double min_scan_data_;
+  ros::Publisher cmd_vel_pub_;
+  ros::Subscriber scan_sub_;
 };
 
 WaypointNav::WaypointNav() :
@@ -77,6 +87,7 @@ WaypointNav::WaypointNav() :
     rate_(1.0),
     loop_flg_(false),
     suspend_flg_(true),
+    line_tracking_flg_(false),
     tfListener_(tfBuffer_),
     last_moved_time_(ros::Time::now().toSec()),
     wait_time_(5.0),
@@ -97,6 +108,7 @@ WaypointNav::WaypointNav() :
 
   function_map_.insert(std::make_pair("run", std::bind(&WaypointNav::run, this)));
   function_map_.insert(std::make_pair("suspend", std::bind(&WaypointNav::suspend, this)));
+  function_map_.insert(std::make_pair("line_tracking", std::bind(&WaypointNav::line_tracking, this)));
 
   visualization_wp_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("visualization_wp", 1);
   cmd_vel_sub_ = nh_.subscribe("cmd_vel", 1, &WaypointNav::cmdVelCallback, this);
@@ -104,6 +116,10 @@ WaypointNav::WaypointNav() :
   suspend_server_ = nh_.advertiseService("suspend_wp_nav", &WaypointNav::suspendNavigationCallback, this);
   clear_costmaps_srv_ = nh_.serviceClient<std_srvs::Empty>("/move_base/clear_costmaps");
   timer_ = nh_.createTimer(ros::Duration(0.1),&WaypointNav::timerCallback,this);
+
+  cmd_vel_pub_ = nh_.advertise<geometry_msgs::Twist>("pub_cmd_vel",1);
+  scan_sub_ = nh_.subscribe("scan", 1, &WaypointNav::scanCallback, this);
+  line_tracking_timer_ = nh_.createTimer(ros::Duration(0.1), &WaypointNav::linetimerCallback, this);
 }
 
 bool WaypointNav::read_yaml(){
@@ -223,6 +239,102 @@ void WaypointNav::run_wp(){
           ROS_ERROR_STREAM("Function " + current_waypoint_->function + " Is Not Found.");
         }
       }
+      else if(line_tracking_flg_ && move_base_action_.getState() == actionlib::SimpleClientGoalState::SUCCEEDED){
+        ROS_INFO("Line tracking mode start!");
+        ros::Rate rate(10.0);
+        double dist = 10000.0;
+
+        //ゲインパラメータ
+        double alpha = -2.0;
+        double beta = -4.0;
+
+        //Lineの始点をロボットの現在位置から取得
+        geometry_msgs::TransformStamped transformStamped;
+        try{
+          transformStamped = tfBuffer_.lookupTransform(world_frame_, robot_frame_, ros::Time(0));
+        }
+        catch (tf2::TransformException &ex) {
+          ROS_WARN("%s",ex.what());
+        }
+
+        double start_trans_x = transformStamped.transform.translation.x;
+        double start_trans_y = transformStamped.transform.translation.y;
+        double start_rot_x = transformStamped.transform.rotation.x;
+        double start_rot_y = transformStamped.transform.rotation.y;
+        double start_rot_z = transformStamped.transform.rotation.z;
+        double start_rot_w = transformStamped.transform.rotation.w;
+
+        tf2::Quaternion quat(start_rot_x,start_rot_y,start_rot_z,start_rot_w);
+        double start_euler_r, start_euler_p, start_euler_y;
+        tf2::Matrix3x3(quat).getRPY(start_euler_r,start_euler_p,start_euler_y);
+
+        //Lineの終点とロボットの距離が一定値以下になるまでループ
+        while(dist > 0.5){
+          geometry_msgs::TransformStamped transformStamped;
+          try{
+            transformStamped = tfBuffer_.lookupTransform(world_frame_, robot_frame_, ros::Time(0));
+          }
+          catch (tf2::TransformException &ex) {
+            ROS_WARN("%s",ex.what());
+          }
+
+          double robot_x = transformStamped.transform.translation.x;
+          double robot_y = transformStamped.transform.translation.y;
+          double wp_x = current_waypoint_->pose.position.x;
+          double wp_y = current_waypoint_->pose.position.y;
+
+          //Lineの終点とロボットの距離
+          dist = std::hypot((wp_x - robot_x), (wp_y - robot_y));
+
+          //ROS_INFO("dist=%lf",dist);
+          
+          //Lineの角度
+          double line_angular = std::atan2(current_waypoint_->pose.position.y-start_trans_y, current_waypoint_->pose.position.x-start_trans_x);
+
+          //Lineとロボットの角度の差
+          double angular_diff = start_euler_y - line_angular; 
+
+          if(angular_diff < -M_PI){
+            angular_diff = angular_diff + 2*M_PI;
+          }
+          //Lineの始点とロボットの位置を結んだ線の角度
+          double point_angular = std::atan2(robot_y-start_trans_y, robot_x-start_trans_x) - line_angular;
+          
+          //ロボットとLineの距離
+          double vertical_diff = std::sin(point_angular) * std::sqrt(std::pow(robot_x - start_trans_x,2) + std::pow(robot_y - start_trans_y,2));
+
+          geometry_msgs::Twist vel;
+    
+          //scanの値が0.01~1.5の時ループ
+          while(min_scan_data_ < 1.5 && min_scan_data_ > 0.01){
+            vel.linear.x = 0.0;
+            vel.angular.x = 0.0;
+            cmd_vel_pub_.publish(vel);
+            ros::spinOnce();
+            rate.sleep();
+          }
+
+          vel.angular.z = alpha * angular_diff + beta * vertical_diff;
+          if(vel.angular.z > M_PI/2){
+            vel.angular.z = M_PI/2;
+          }
+          if(vel.angular.z < -M_PI/2){
+            vel.angular.z = -M_PI/2;
+          }
+          vel.linear.x = 0.5;
+          cmd_vel_pub_.publish(vel);
+          
+          ros::spinOnce();
+          rate.sleep();
+        }
+
+          ROS_INFO("finish line tracking");
+          geometry_msgs::Twist vel;
+          vel.linear.x = 0.0;
+          vel.angular.z = 0.0;
+          cmd_vel_pub_.publish(vel);
+          line_tracking_flg_ = false;
+      }
       ros::spinOnce();
       rate_.sleep();
     }
@@ -290,6 +402,30 @@ void WaypointNav::cmdVelCallback(const geometry_msgs::Twist::ConstPtr& cmd_vel_m
   else{
     last_moved_time_ = ros::Time::now().toSec();
   }
+}
+
+void WaypointNav::scanCallback(const sensor_msgs::LaserScan::ConstPtr& scan_msg){
+  min_scan_data_ =  get_min_scan_data(scan_msg, 5.0);
+  ROS_INFO("min_scan_data=%lf",min_scan_data_);
+}
+
+//LaserScan型から90-degree ~ 90+degreeの範囲で最小の値を返す
+double WaypointNav::get_min_scan_data(const sensor_msgs::LaserScan::ConstPtr& scan_msg, double degree){
+
+  double one_data_rad = (scan_msg->angle_max - scan_msg->angle_min)/scan_msg->ranges.size();
+  double n = std::ceil(M_PI * degree /180 /one_data_rad);
+  int start = int(scan_msg->ranges.size()/2 -n);
+  int finish = int(scan_msg->ranges.size()/2 +n+1);
+
+  double min_scan_data = 10000;
+  for(int i = start; i < finish; i++){
+    double temp_scan_data = scan_msg->ranges[i];
+    if(temp_scan_data < min_scan_data){
+      min_scan_data = temp_scan_data;
+    }
+  }
+
+  return min_scan_data;
 }
 
 bool WaypointNav::startNavigationCallback(std_srvs::Trigger::Request &request, std_srvs::Trigger::Response &response){
@@ -373,6 +509,20 @@ void WaypointNav::suspend(){
     ROS_INFO("Your robot will get suspend mode after moving");
     suspend_flg_ = true;
   }
+}
+
+void WaypointNav::line_tracking(){
+  run();
+  
+  if(suspend_flg_){
+    ROS_WARN("Your robot is already suspend mode");
+  }
+  else{
+    ROS_INFO("Your robot will get suspend mode after moving");
+    suspend_flg_ = true;
+  } 
+    ROS_INFO("Your robot will get line tracking mode after moving");
+    line_tracking_flg_ = true;
 }
 
 int main(int argc, char** argv){
