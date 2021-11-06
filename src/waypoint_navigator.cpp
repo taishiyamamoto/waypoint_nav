@@ -119,7 +119,6 @@ WaypointNav::WaypointNav() :
 
   cmd_vel_pub_ = nh_.advertise<geometry_msgs::Twist>("pub_cmd_vel",1);
   scan_sub_ = nh_.subscribe("scan", 1, &WaypointNav::scanCallback, this);
-  line_tracking_timer_ = nh_.createTimer(ros::Duration(0.1), &WaypointNav::linetimerCallback, this);
 }
 
 bool WaypointNav::read_yaml(){
@@ -239,6 +238,7 @@ void WaypointNav::run_wp(){
           ROS_ERROR_STREAM("Function " + current_waypoint_->function + " Is Not Found.");
         }
       }
+      // Line Tracking mode
       else if(line_tracking_flg_ && move_base_action_.getState() == actionlib::SimpleClientGoalState::SUCCEEDED){
         ROS_INFO("Line tracking mode start!");
         ros::Rate rate(10.0);
@@ -327,12 +327,13 @@ void WaypointNav::run_wp(){
           ros::spinOnce();
           rate.sleep();
         }
-
+          //whileループから抜けたら停止してsuspend modeに移行
           ROS_INFO("finish line tracking");
           geometry_msgs::Twist vel;
           vel.linear.x = 0.0;
           vel.angular.z = 0.0;
           cmd_vel_pub_.publish(vel);
+          current_waypoint_++;
           line_tracking_flg_ = false;
       }
       ros::spinOnce();
